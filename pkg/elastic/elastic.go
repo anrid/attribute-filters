@@ -28,10 +28,11 @@ const (
 type Map = map[string]interface{}
 
 type IndexArgs struct {
-	Dir            string
-	FilenameFilter string
-	BatchSize      int
-	Max            int
+	Dir          string
+	PrefixFilter string
+	BatchSize    int
+	Max          int
+	ConvertIDs   map[string]int // UUID => int ID
 }
 
 func Index(a IndexArgs) {
@@ -43,10 +44,11 @@ func Index(a IndexArgs) {
 
 	importer.FromGzippedCSVFiles(importer.FromGzippedCSVFilesArgs{
 		Dir:          a.Dir,
-		PrefixFilter: a.FilenameFilter,
+		PrefixFilter: a.PrefixFilter,
 		Batcher: &item.ItemsBatch{
 			Size:         a.BatchSize,
 			ForEachBatch: BulkIndex,
+			ConvertIDs:   a.ConvertIDs,
 		},
 		MaxRecordsToRead: a.Max,
 	})
@@ -71,6 +73,7 @@ type QueryResult struct {
 	From            int
 	Items           []*item.Item
 	ItemIDs         []string
+	Scores          []float64
 	CategoryFacets  []*CategoryFacet
 	AttributeFacets []*AttributeFacet
 }
@@ -165,12 +168,6 @@ func Query(a QueryArgs) (*QueryResult, error) {
 		return nil, fmt.Errorf("got unexpected status code %d : %s", code, res)
 	}
 
-	// preview := res[:]
-	// if len(preview) > 500 {
-	// 	preview = preview[0:500]
-	// }
-	// fmt.Printf("Preview: %s\n", preview)
-
 	se := new(SearchResult)
 	err = sonic.Unmarshal(res, se)
 	if err != nil {
@@ -208,6 +205,9 @@ func Query(a QueryArgs) (*QueryResult, error) {
 					ItemCondition: s.ItemCondition,
 					Attributes:    s.Attributes,
 				})
+
+				qr.Scores = append(qr.Scores, doc.Score)
+
 			} else {
 				fmt.Printf("%03d. [Score: %2.02f] ID: %s\n", i+1, doc.Score, doc.ID)
 

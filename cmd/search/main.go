@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/anrid/attribute-filters/pkg/attribute"
 	"github.com/anrid/attribute-filters/pkg/elastic"
@@ -10,11 +11,11 @@ import (
 )
 
 func main() {
-	dataDir := pflag.String("data", "", "Dir with gzipped CSV files containing exported tables from the Item Attributes Postgres database (e.g. attributes.csv.gz)")
-	categoriesFile := pflag.String("cats", "", "Item categories file in JSON format")
+	attributesDir := pflag.StringP("attributes-data", "a", "", "dir with gzipped CSV files containing exported tables from the Item Attributes Postgres database (e.g. attributes.csv.gz)")
+	categoriesFile := pflag.String("categories-file", "", "categories file in JSON format")
 
 	keyword := pflag.StringP("keyword", "k", "", "keyword/phrase to search for")
-	categoryID := pflag.IntP("category-id", "c", 0, "limit to category ID")
+	categoryID := pflag.IntP("cid", "c", 0, "limit to category ID")
 	max := pflag.IntP("max", "m", 3, "return max X items")
 
 	pflag.Parse()
@@ -43,7 +44,7 @@ func main() {
 	}
 
 	hasResults := (len(res.Items) > 0 || len(res.CategoryFacets) > 0 || len(res.AttributeFacets) > 0)
-	lookupFilesAvalable := *dataDir != "" && *categoriesFile != ""
+	lookupFilesAvalable := *attributesDir != "" && *categoriesFile != ""
 
 	if hasResults && lookupFilesAvalable {
 		db := attribute.NewDB()
@@ -53,18 +54,33 @@ func main() {
 			panic(err)
 		}
 
-		err = db.ImportPostgresDatabase(attribute.ImportPostgresDatabaseArgs{Dir: *dataDir})
+		err = db.ImportPostgresDatabase(attribute.ImportPostgresDatabaseArgs{Dir: *attributesDir})
 		if err != nil {
 			panic(err)
 		}
 
 		fmt.Printf("\nQuery results:\n\n")
 
+		tpl := "%03d. Item %s (score: %2.02f)\n" +
+			" - name      : %s\n" +
+			" - category  : %s\n" +
+			" - created   : %s\n" +
+			" - status    : %d\n"
+
 		for c, i := range res.Items {
-			fmt.Printf("%03d. Item %s - '%s'  Category: %s\n", c+1, i.ID, i.Name, db.FullCategoryName(i.CategoryID))
+			created := time.UnixMilli(i.Created)
+			fmt.Printf(tpl,
+				c+1,
+				i.ID,
+				res.Scores[c],
+				i.Name,
+				db.FullCategoryName(i.CategoryID),
+				created.Format("2006-01-02 15:04:05"),
+				i.Status,
+			)
 
 			if len(i.Attributes) > 0 {
-				fmt.Printf("   Attributes:\n")
+				fmt.Printf(" - attributes:\n")
 				for _, pair := range i.Attributes {
 					fmt.Printf("    - [%-13s]  %s\n", pair, db.AttributeOptionPairToString(pair))
 				}
