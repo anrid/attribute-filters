@@ -16,6 +16,7 @@ func main() {
 	categoriesFile := pflag.StringP("cats", "c", "", "Item categories file (.json.gz format)")
 	selectedCategoryID := pflag.Int("cid", 242, "Selected category ID")
 	selectedAttributes := pflag.StringSliceP("attrs", "a", []string{}, "Selected attributes")
+	pageSize := pflag.Int("page", 3, "Page size / max number of options to return per attribute")
 
 	pflag.Parse()
 
@@ -45,7 +46,7 @@ func main() {
 
 	sc := &attribute.SearchConditions{
 		CategoryIDs: []int{*selectedCategoryID},
-		PageSize:    3,
+		PageSize:    *pageSize,
 	}
 	if len(*selectedAttributes) > 0 {
 		for _, s := range *selectedAttributes {
